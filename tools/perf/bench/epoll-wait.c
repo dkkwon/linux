@@ -325,7 +325,7 @@ static int do_threads(struct worker *worker, struct perf_cpu_map *cpu)
 			return 1;
 
 		for (j = 0; j < nfds; j++) {
-			int efd = multiq ? w->epollfd : epollfd;
+			int efd = multiq ? w->epollfd : epollfd;	// if (multiq == 0) { only one epollfd is used }
 			struct epoll_event ev;
 
 			w->fdmap[j] = eventfd(0, EFD_NONBLOCK);
@@ -341,6 +341,7 @@ static int do_threads(struct worker *worker, struct perf_cpu_map *cpu)
 				err(EXIT_FAILURE, "epoll_ctl");
 		}
 
+		// CPU 고정
 		if (!noaffinity) {
 			CPU_ZERO(&cpuset);
 			CPU_SET(cpu->map[i % cpu->nr], &cpuset);
@@ -352,6 +353,7 @@ static int do_threads(struct worker *worker, struct perf_cpu_map *cpu)
 			attrp = &thread_attr;
 		}
 
+		// multi-thread 를 통해 epoll_wait() -> read() 동작 수행
 		ret = pthread_create(&w->thread, attrp, workerfn,
 				     (void *)(struct worker *) w);
 		if (ret)
@@ -435,6 +437,7 @@ int bench_epoll_wait(int argc, const char **argv)
 	if (!cpu)
 		goto errmem;
 
+	// 하나의 epoll_fd (인스턴스를 가지고, 멀티 쓰레드에서 사용 가능)
 	/* a single, main epoll instance */
 	if (!multiq) {
 		epollfd = epoll_create(1);
@@ -445,7 +448,7 @@ int bench_epoll_wait(int argc, const char **argv)
 		 * Deal with nested epolls, if any.
 		 */
 		if (nested)
-			nest_epollfd(NULL);
+			nest_epollfd(NULL);		// 중첩된 구조도 지원하는가?
 	}
 
 	printinfo("Using %s queue model\n", multiq ? "multi" : "single");
@@ -481,6 +484,7 @@ int bench_epoll_wait(int argc, const char **argv)
 
 	gettimeofday(&bench__start, NULL);
 
+	// 멀티 쓰레드 생성
 	do_threads(worker, cpu);
 
 	pthread_mutex_lock(&thread_lock);
